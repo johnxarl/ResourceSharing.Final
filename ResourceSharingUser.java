@@ -33,12 +33,16 @@ public class ResourceSharingUser extends JFrame {
         JButton refreshBtn = new JButton("Refresh");
         refreshBtn.addActionListener(e -> displayItems());
 
+        JButton requestBtn = new JButton("Request Item");
+        requestBtn.addActionListener(e -> requestSelectedItem());
+
         JTextField searchField = new JTextField(20);
         JButton searchBtn = new JButton("Search");
         searchBtn.addActionListener(e -> searchItems(searchField.getText().trim()));
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         topPanel.add(refreshBtn);
+        topPanel.add(requestBtn);
 
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         searchPanel.add(new JLabel("Search:"));
@@ -58,12 +62,21 @@ public class ResourceSharingUser extends JFrame {
             Statement stmt = conn.createStatement();
             ResultSet rs = stmt.executeQuery("SELECT * FROM items");
             while (rs.next()) {
+                String availability;
+                if (rs.getInt("is_requested") == 1) {
+                    availability = "Pending";
+                } else if (rs.getInt("is_available") == 1) {
+                    availability = "Yes";
+                } else {
+                    availability = "No";
+                }
+
                 tableModel.addRow(new Object[]{
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getString("owner"),
                         rs.getString("category"),
-                        rs.getInt("is_available") == 1 ? "Yes" : "No"
+                        availability
                 });
             }
         } catch (SQLException e) {
@@ -94,16 +107,60 @@ public class ResourceSharingUser extends JFrame {
 
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
+                String availability;
+                if (rs.getInt("is_requested") == 1) {
+                    availability = "Pending";
+                } else if (rs.getInt("is_available") == 1) {
+                    availability = "Yes";
+                } else {
+                    availability = "No";
+                }
+
                 tableModel.addRow(new Object[]{
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getString("owner"),
                         rs.getString("category"),
-                        rs.getInt("is_available") == 1 ? "Yes" : "No"
+                        availability
                 });
             }
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Search error: " + e.getMessage());
+        }
+    }
+
+    private void requestSelectedItem() {
+        int selectedRow = itemTable.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Please select an item to request.");
+            return;
+        }
+
+        String availability = (String) tableModel.getValueAt(selectedRow, 4);
+        if (!availability.equalsIgnoreCase("Yes")) {
+            JOptionPane.showMessageDialog(this, "This item is not available right now.");
+            return;
+        }
+
+        int id = (int) tableModel.getValueAt(selectedRow, 0);
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Do you want to request this item?",
+                "Confirm Request", JOptionPane.YES_NO_OPTION);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        try (Connection conn = DBHelper.getConnection()) {
+            PreparedStatement ps = conn.prepareStatement("UPDATE items SET is_requested = 1 WHERE id = ?");
+            ps.setInt(1, id);
+            int updated = ps.executeUpdate();
+            if (updated > 0) {
+                JOptionPane.showMessageDialog(this, "Item request sent! Pending admin approval.");
+                displayItems();
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to request item.");
+            }
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "Error: " + e.getMessage());
         }
     }
 }

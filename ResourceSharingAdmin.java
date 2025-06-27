@@ -7,7 +7,7 @@ import java.sql.*;
 
 public class ResourceSharingAdmin extends JFrame {
     private final DefaultTableModel tableModel = new DefaultTableModel(
-            new String[]{"ID", "Name", "Owner", "Category", "Available"}, 0
+            new String[]{"ID", "Name", "Owner", "Category", "Available", "Requested"}, 0
     ) {
         public boolean isCellEditable(int row, int column) {
             return false;
@@ -46,10 +46,14 @@ public class ResourceSharingAdmin extends JFrame {
         JButton toggleBtn = new JButton("Toggle Status");
         toggleBtn.addActionListener(e -> toggleStatus());
 
+        JButton approveBtn = new JButton("Approve Request");
+        approveBtn.addActionListener(e -> approveRequest());
+
         JPanel top = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         top.add(refreshBtn);
         top.add(deleteBtn);
         top.add(toggleBtn);
+        top.add(approveBtn);
 
         JTextField searchField = new JTextField(20);
         JButton searchBtn = new JButton("Search");
@@ -108,7 +112,7 @@ public class ResourceSharingAdmin extends JFrame {
         }
 
         try (Connection conn = DBHelper.getConnection()) {
-            PreparedStatement ps = conn.prepareStatement("INSERT INTO items (name, owner, category, is_available) VALUES (?, ?, ?, 1)");
+            PreparedStatement ps = conn.prepareStatement("INSERT INTO items (name, owner, category, is_available, is_requested) VALUES (?, ?, ?, 1, 0)");
             ps.setString(1, name);
             ps.setString(2, owner);
             ps.setString(3, category);
@@ -129,12 +133,16 @@ public class ResourceSharingAdmin extends JFrame {
             Statement stmt = conn.createStatement();
             ResultSet rs = stmt.executeQuery("SELECT * FROM items");
             while (rs.next()) {
+                String availability = rs.getInt("is_available") == 1 ? "Yes" : "No";
+                String requestStatus = rs.getInt("is_requested") == 1 ? "Pending Approval" : "Available";
+
                 tableModel.addRow(new Object[]{
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getString("owner"),
                         rs.getString("category"),
-                        rs.getInt("is_available") == 1 ? "Yes" : "No"
+                        availability,
+                        requestStatus
                 });
             }
         } catch (SQLException e) {
@@ -183,6 +191,36 @@ public class ResourceSharingAdmin extends JFrame {
         }
     }
 
+    private void approveRequest() {
+        int selectedRow = itemTable.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Select an item with a request to approve.");
+            return;
+        }
+
+        String requested = (String) tableModel.getValueAt(selectedRow, 5);
+        if (!requested.equalsIgnoreCase("Pending Approval")) {
+            JOptionPane.showMessageDialog(this, "This item has not been requested.");
+            return;
+        }
+
+        int id = (int) tableModel.getValueAt(selectedRow, 0);
+
+        try (Connection conn = DBHelper.getConnection()) {
+            PreparedStatement ps = conn.prepareStatement("UPDATE items SET is_requested = 0, is_available = 0 WHERE id = ?");
+            ps.setInt(1, id);
+            int updated = ps.executeUpdate();
+            if (updated > 0) {
+                JOptionPane.showMessageDialog(this, "Request approved. Item marked as unavailable.");
+                displayItems();
+            } else {
+                JOptionPane.showMessageDialog(this, "Approval failed.");
+            }
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "Error: " + e.getMessage());
+        }
+    }
+
     private void searchItems(String query) {
         tableModel.setRowCount(0);
         if (query.isEmpty()) {
@@ -206,12 +244,16 @@ public class ResourceSharingAdmin extends JFrame {
 
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
+                String availability = rs.getInt("is_available") == 1 ? "Yes" : "No";
+                String requestStatus = rs.getInt("is_requested") == 1 ? "Pending Approval" : "Available";
+
                 tableModel.addRow(new Object[]{
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getString("owner"),
                         rs.getString("category"),
-                        rs.getInt("is_available") == 1 ? "Yes" : "No"
+                        availability,
+                        requestStatus
                 });
             }
         } catch (SQLException e) {
