@@ -49,6 +49,7 @@ public class RentalPlatform extends JFrame {
         itemTable.setFillsViewportHeight(true);
         JScrollPane scrollPane = new JScrollPane(itemTable);
 
+        // 🔼 Top Panel: Refresh + Delete
         JButton refreshBtn = new JButton("Refresh");
         refreshBtn.addActionListener(e -> displayItems());
 
@@ -57,23 +58,28 @@ public class RentalPlatform extends JFrame {
 
         JPanel top = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         top.add(refreshBtn);
-        top.add(deleteBtn); // ✅ Add the button to the view
-
+        top.add(deleteBtn);
         panel.add(top, BorderLayout.NORTH);
+
+        // 🖥️ Center: Table with scroll
         panel.add(scrollPane, BorderLayout.CENTER);
-       
-        
+
+        // 🔽 Bottom Panel: Search + Toggle Status
         JTextField searchField = new JTextField(20);
         JButton searchBtn = new JButton("Search");
         searchBtn.addActionListener(e -> searchItems(searchField.getText().trim()));
 
-        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        searchPanel.add(new JLabel("Search:"));
-        searchPanel.add(searchField);
-        searchPanel.add(searchBtn);
-        
-        panel.add(searchPanel, BorderLayout.SOUTH);
-        
+        JButton toggleBtn = new JButton("Toggle Status");
+        toggleBtn.addActionListener(e -> toggleStatus());
+
+        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        bottomPanel.add(new JLabel("Search:"));
+        bottomPanel.add(searchField);
+        bottomPanel.add(searchBtn);
+        bottomPanel.add(toggleBtn);
+
+        panel.add(bottomPanel, BorderLayout.SOUTH); // ✅ All buttons in one SOUTH panel
+
         return panel;
     }
 
@@ -153,6 +159,33 @@ public class RentalPlatform extends JFrame {
             }
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Search error: " + e.getMessage());
+        }
+    }
+    
+    private void toggleStatus() {
+        int selectedRow = itemTable.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Please select an item to toggle.");
+            return;
+        }
+
+        int itemId = (int) tableModel.getValueAt(selectedRow, 0); // column 0 is ID
+
+        try (Connection conn = DBHelper.getConnection()) {
+            PreparedStatement ps = conn.prepareStatement(
+                "UPDATE items SET is_available = CASE WHEN is_available = 1 THEN 0 ELSE 1 END WHERE id = ?"
+            );
+            ps.setInt(1, itemId);
+            int updated = ps.executeUpdate();
+
+            if (updated > 0) {
+                JOptionPane.showMessageDialog(this, "Status toggled.");
+                displayItems();
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to update status.");
+            }
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "DB error: " + e.getMessage());
         }
     }
 
